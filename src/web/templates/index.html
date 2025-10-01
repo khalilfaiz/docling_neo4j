@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Layout-Aware RAG with Evidence Pins</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 32px;
+        }
+        
+        .header p {
+            margin: 0;
+            color: #666;
+            font-size: 16px;
+        }
+        
+        .search-box {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .search-form {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 12px 20px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            outline: none;
+        }
+        
+        .search-input:focus {
+            border-color: #007acc;
+        }
+        
+        .search-button {
+            padding: 12px 30px;
+            font-size: 16px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .search-button:hover {
+            background: #005a9e;
+        }
+        
+        .search-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .results {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 30px;
+            display: none;
+        }
+        
+        .results.show {
+            display: block;
+        }
+        
+        .results-header {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .results-header h2 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+        }
+        
+        .results-info {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .result-item {
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            transition: all 0.2s;
+        }
+        
+        .result-item:hover {
+            border-color: #007acc;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 15px;
+        }
+        
+        .result-title {
+            font-weight: 600;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .result-score {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .result-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 15px;
+        }
+        
+        .result-text {
+            line-height: 1.6;
+            color: #444;
+            margin-bottom: 15px;
+        }
+        
+        .result-text mark {
+            background: #fff3cd;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+        
+        .evidence-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: #007acc;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 6px 12px;
+            border: 1px solid #007acc;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        
+        .evidence-link:hover {
+            background: #007acc;
+            color: white;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007acc;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #fee;
+            border: 1px solid #fcc;
+            color: #c00;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .section-path {
+            font-size: 12px;
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Layout-Aware RAG with Evidence Pins</h1>
+            <p>Search documents with clickable citations that highlight exact PDF regions</p>
+        </div>
+        
+        <div class="search-box">
+            <form class="search-form" onsubmit="performSearch(event)">
+                <input 
+                    type="text" 
+                    class="search-input" 
+                    id="search-input" 
+                    placeholder="Ask a question about your documents..."
+                    required
+                />
+                <button type="submit" class="search-button" id="search-button">
+                    Search
+                </button>
+            </form>
+            
+            <div style="margin-top: 20px; display: flex; align-items: center; gap: 10px;">
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="checkbox" id="use-llm" /> Use LLM for answers
+                </label>
+                <label style="display: flex; align-items: center; gap: 5px;">
+                    <input type="checkbox" id="use-query-expansion" /> Query expansion
+                </label>
+                <button onclick="showUploadDialog()" style="margin-left: auto; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Upload PDF
+                </button>
+            </div>
+        </div>
+        
+        <div class="results" id="results">
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                Searching documents...
+            </div>
+            
+            <div id="results-content"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentQuery = '';
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function highlightQuery(text, query) {
+            if (!query) return escapeHtml(text);
+            
+            const words = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+            let highlighted = escapeHtml(text);
+            
+            words.forEach(word => {
+                const regex = new RegExp(`\\b(${word})`, 'gi');
+                highlighted = highlighted.replace(regex, '<mark>$1</mark>');
+            });
+            
+            return highlighted;
+        }
+        
+        function createEvidenceLink(chunk) {
+            const params = new URLSearchParams({
+                doc: chunk.doc_id,
+                page: chunk.page_num,
+                bbox: chunk.bbox.join(','),
+                chunk: chunk.chunk_id
+            });
+            
+            return `/viewer?${params.toString()}`;
+        }
+        
+        function renderResults(data) {
+            const resultsContent = document.getElementById('results-content');
+            
+            if (!data.results || data.results.length === 0) {
+                resultsContent.innerHTML = `
+                    <div class="no-results">
+                        <h3>No results found</h3>
+                        <p>Try rephrasing your question or using different keywords.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = `
+                <div class="results-header">
+                    <h2>Search Results</h2>
+                    <div class="results-info">
+                        Found ${data.results.length} relevant chunks for: "${escapeHtml(data.query)}"
+                    </div>
+                </div>
+            `;
+            
+            // Show LLM answer if available
+            if (data.answer_with_citations) {
+                html += `
+                    <div style="background: #e3f2fd; border: 1px solid #1976d2; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 10px 0; color: #1976d2;">AI-Generated Answer</h3>
+                        <div style="line-height: 1.6; color: #333;">
+                            ${data.answer_with_citations}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            data.results.forEach((result, index) => {
+                const evidenceUrl = createEvidenceLink(result);
+                const sectionPath = result.section_headings && result.section_headings.length > 0
+                    ? result.section_headings.join(' > ')
+                    : '';
+                
+                html += `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <div class="result-title">
+                                ${escapeHtml(result.filename)} - Page ${result.page_num}
+                            </div>
+                            <div class="result-score">
+                                ${(result.score * 100).toFixed(1)}% match
+                            </div>
+                        </div>
+                        
+                        ${sectionPath ? `<div class="section-path">${escapeHtml(sectionPath)}</div>` : ''}
+                        
+                        <div class="result-meta">
+                            <span>Chunk: ${result.chunk_id}</span>
+                            <span>Index: ${result.chunk_index}</span>
+                        </div>
+                        
+                        <div class="result-text">
+                            ${highlightQuery(result.text, currentQuery)}
+                        </div>
+                        
+                        <a href="${evidenceUrl}" target="_blank" class="evidence-link">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 2a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-1 0v-4A.5.5 0 0 1 8 2z"/>
+                                <path d="M3.5 7.5A.5.5 0 0 1 4 7h8a.5.5 0 0 1 0 1H4a.5.5 0 0 1-.5-.5z"/>
+                                <path d="M8 13.5a.5.5 0 0 1-.5-.5V9a.5.5 0 0 1 1 0v4a.5.5 0 0 1-.5.5z"/>
+                                <path d="M3 2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2zm1 0v12h8V2H4z"/>
+                            </svg>
+                            View Evidence in PDF
+                        </a>
+                    </div>
+                `;
+            });
+            
+            resultsContent.innerHTML = html;
+        }
+        
+        async function performSearch(event) {
+            event.preventDefault();
+            
+            const searchInput = document.getElementById('search-input');
+            const searchButton = document.getElementById('search-button');
+            const results = document.getElementById('results');
+            const loading = document.getElementById('loading');
+            const resultsContent = document.getElementById('results-content');
+            const useLLM = document.getElementById('use-llm').checked;
+            const useQueryExpansion = document.getElementById('use-query-expansion').checked;
+            
+            currentQuery = searchInput.value.trim();
+            if (!currentQuery) return;
+            
+            // Show loading state
+            results.classList.add('show');
+            loading.style.display = 'block';
+            resultsContent.innerHTML = '';
+            searchButton.disabled = true;
+            
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: currentQuery,
+                        top_k: 10,
+                        context_window: 1,
+                        use_llm: useLLM,
+                        use_query_expansion: useQueryExpansion,
+                        llm_provider: 'ollama'  // or 'openai' if configured
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Hide loading, show results
+                loading.style.display = 'none';
+                renderResults(data);
+                
+            } catch (error) {
+                console.error('Search error:', error);
+                loading.style.display = 'none';
+                resultsContent.innerHTML = `
+                    <div class="error">
+                        <strong>Error:</strong> ${error.message || 'Failed to perform search'}
+                    </div>
+                `;
+            } finally {
+                searchButton.disabled = false;
+            }
+        }
+        
+        // Example queries
+        const exampleQueries = [
+            "What are the requirements for ramp slopes?",
+            "What are the accessibility standards for handrails?",
+            "What are the ADA requirements for doorways?",
+            "What is the minimum width for accessible routes?",
+            "What are the requirements for accessible parking spaces?"
+        ];
+        
+        // File upload functionality
+        function showUploadDialog() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.pdf';
+            input.onchange = async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Show upload progress
+                const resultsContent = document.getElementById('results-content');
+                const results = document.getElementById('results');
+                results.classList.add('show');
+                resultsContent.innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        Uploading and processing ${escapeHtml(file.name)}...
+                    </div>
+                `;
+                
+                try {
+                    const response = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        resultsContent.innerHTML = `
+                            <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 4px;">
+                                <strong>Success!</strong> ${data.message}<br>
+                                File ID: ${data.file_id}<br>
+                                <small>The document will be available for searching once processing is complete.</small>
+                            </div>
+                        `;
+                        
+                        // Check processing status
+                        checkUploadStatus(data.file_id);
+                    } else {
+                        throw new Error(data.detail || 'Upload failed');
+                    }
+                } catch (error) {
+                    resultsContent.innerHTML = `
+                        <div class="error">
+                            <strong>Upload Error:</strong> ${error.message}
+                        </div>
+                    `;
+                }
+            };
+            input.click();
+        }
+        
+        async function checkUploadStatus(fileId) {
+            const checkInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/status/${fileId}`);
+                    const data = await response.json();
+                    
+                    if (data.status === 'completed') {
+                        clearInterval(checkInterval);
+                        const resultsContent = document.getElementById('results-content');
+                        resultsContent.innerHTML += `
+                            <div style="margin-top: 10px; background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 4px;">
+                                <strong>Processing Complete!</strong> Document "${data.filename}" is now searchable.
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    clearInterval(checkInterval);
+                }
+            }, 2000); // Check every 2 seconds
+            
+            // Stop checking after 60 seconds
+            setTimeout(() => clearInterval(checkInterval), 60000);
+        }
+        
+        // Set random example on load
+        window.addEventListener('load', () => {
+            const searchInput = document.getElementById('search-input');
+            const randomExample = exampleQueries[Math.floor(Math.random() * exampleQueries.length)];
+            searchInput.placeholder = `e.g., ${randomExample}`;
+        });
+    </script>
+</body>
+</html>

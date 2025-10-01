@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Viewer - Evidence Pins</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 24px;
+        }
+        
+        .info {
+            display: flex;
+            gap: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .pdf-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            position: relative;
+            overflow: auto;
+        }
+        
+        .controls {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        button {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #f8f8f8;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        #canvas-container {
+            position: relative;
+            display: inline-block;
+            border: 1px solid #ddd;
+        }
+        
+        #pdf-canvas {
+            display: block;
+        }
+        
+        #overlay {
+            position: absolute;
+            pointer-events: none;
+            top: 0;
+            left: 0;
+        }
+        
+        .highlight {
+            position: absolute;
+            border: 2px solid #007acc;
+            background: rgba(0, 122, 204, 0.15);
+            pointer-events: auto;
+            cursor: pointer;
+        }
+        
+        .highlight:hover {
+            background: rgba(0, 122, 204, 0.25);
+            border-color: #005a9e;
+        }
+        
+        .citation-info {
+            background: #f0f8ff;
+            border: 1px solid #007acc;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .citation-info h3 {
+            margin: 0 0 10px 0;
+            color: #007acc;
+            font-size: 16px;
+        }
+        
+        .citation-text {
+            color: #333;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .error {
+            background: #fee;
+            border: 1px solid #fcc;
+            color: #c00;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>PDF Evidence Viewer</h1>
+            <div class="info">
+                <span id="doc-name">Loading...</span>
+                <span>|</span>
+                <span id="page-info">Page: -</span>
+                <span>|</span>
+                <span id="chunk-info">Chunk: -</span>
+            </div>
+        </div>
+        
+        <div class="pdf-container">
+            <div class="controls">
+                <button id="prev-page" onclick="changePage(-1)">Previous</button>
+                <span id="page-num">Page 1</span>
+                <button id="next-page" onclick="changePage(1)">Next</button>
+                <span style="margin-left: 20px;">Zoom:</span>
+                <button onclick="changeZoom(-0.2)">-</button>
+                <span id="zoom-level">150%</span>
+                <button onclick="changeZoom(0.2)">+</button>
+            </div>
+            
+            <div id="canvas-container">
+                <canvas id="pdf-canvas"></canvas>
+                <div id="overlay"></div>
+            </div>
+            
+            <div id="citation-info" class="citation-info" style="display: none;">
+                <h3>Citation Details</h3>
+                <div class="citation-text" id="citation-text"></div>
+            </div>
+        </div>
+        
+        <div id="loading" class="loading">
+            Loading PDF...
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        // Global variables
+        let pdfDoc = null;
+        let pageNum = 1;
+        let pageRendering = false;
+        let pageNumPending = null;
+        let scale = 1.5;
+        let currentPage = null;
+        
+        // Parse URL parameters
+        const params = new URLSearchParams(window.location.search);
+        const docId = params.get('doc');
+        const targetPage = parseInt(params.get('page') || '1');
+        const bbox = params.get('bbox');
+        const chunkId = params.get('chunk');
+        
+        // Update page info
+        document.getElementById('chunk-info').textContent = `Chunk: ${chunkId || 'N/A'}`;
+        
+        /**
+         * Convert PDF coordinates to canvas coordinates
+         */
+        function pdfToCanvas(x, y, viewport) {
+            // PDF coordinates have origin at bottom-left
+            // Canvas has origin at top-left
+            const px = x * scale;
+            const py = viewport.height - (y * scale);
+            return [px, py];
+        }
+        
+        /**
+         * Render the page
+         */
+        function renderPage(num) {
+            pageRendering = true;
+            
+            pdfDoc.getPage(num).then(function(page) {
+                currentPage = page;
+                const viewport = page.getViewport({ scale: scale });
+                const canvas = document.getElementById('pdf-canvas');
+                const ctx = canvas.getContext('2d');
+                
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                // Update overlay size
+                const overlay = document.getElementById('overlay');
+                overlay.style.width = canvas.width + 'px';
+                overlay.style.height = canvas.height + 'px';
+                
+                // Render PDF page
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+                
+                const renderTask = page.render(renderContext);
+                
+                renderTask.promise.then(function() {
+                    pageRendering = false;
+                    
+                    if (pageNumPending !== null) {
+                        renderPage(pageNumPending);
+                        pageNumPending = null;
+                    }
+                    
+                    // Draw highlights if on target page
+                    if (num === targetPage && bbox) {
+                        drawHighlights(viewport);
+                    }
+                });
+            });
+            
+            // Update page counters
+            document.getElementById('page-num').textContent = 'Page ' + num;
+            document.getElementById('page-info').textContent = 'Page: ' + num + ' / ' + pdfDoc.numPages;
+        }
+        
+        /**
+         * Draw highlight rectangles
+         */
+        function drawHighlights(viewport) {
+            const overlay = document.getElementById('overlay');
+            overlay.innerHTML = ''; // Clear existing highlights
+            
+            if (!bbox) return;
+            
+            // Parse bbox parameter (can be single or multiple)
+            const bboxes = bbox.split(';').map(b => b.split(',').map(parseFloat));
+            
+            bboxes.forEach((box, index) => {
+                if (box.length !== 4) return;
+                
+                const [x0, y0, x1, y1] = box;
+                
+                // Convert PDF coordinates to canvas coordinates
+                const [left, top] = pdfToCanvas(x0, y1, viewport);
+                const [right, bottom] = pdfToCanvas(x1, y0, viewport);
+                
+                const width = right - left;
+                const height = bottom - top;
+                
+                // Create highlight div
+                const highlight = document.createElement('div');
+                highlight.className = 'highlight';
+                highlight.style.left = left + 'px';
+                highlight.style.top = top + 'px';
+                highlight.style.width = width + 'px';
+                highlight.style.height = height + 'px';
+                highlight.title = `Evidence region ${index + 1}`;
+                
+                highlight.onclick = () => showCitationInfo();
+                
+                overlay.appendChild(highlight);
+            });
+            
+            // Show citation info
+            showCitationInfo();
+        }
+        
+        /**
+         * Queue page rendering
+         */
+        function queueRenderPage(num) {
+            if (pageRendering) {
+                pageNumPending = num;
+            } else {
+                renderPage(num);
+            }
+        }
+        
+        /**
+         * Display previous/next page
+         */
+        function changePage(delta) {
+            const newPage = pageNum + delta;
+            if (newPage >= 1 && newPage <= pdfDoc.numPages) {
+                pageNum = newPage;
+                queueRenderPage(pageNum);
+            }
+            
+            // Update button states
+            document.getElementById('prev-page').disabled = pageNum <= 1;
+            document.getElementById('next-page').disabled = pageNum >= pdfDoc.numPages;
+        }
+        
+        /**
+         * Change zoom level
+         */
+        function changeZoom(delta) {
+            scale = Math.max(0.5, Math.min(3.0, scale + delta));
+            document.getElementById('zoom-level').textContent = Math.round(scale * 100) + '%';
+            queueRenderPage(pageNum);
+        }
+        
+        /**
+         * Show citation information
+         */
+        function showCitationInfo() {
+            const citationDiv = document.getElementById('citation-info');
+            const citationText = document.getElementById('citation-text');
+            
+            // Fetch chunk text from API if chunk ID is provided
+            if (chunkId) {
+                fetch(`/api/chunk/${chunkId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            citationText.textContent = 'Error loading chunk text';
+                        } else {
+                            citationText.innerHTML = `
+                                <strong>Chunk ID:</strong> ${data.chunk_id}<br>
+                                <strong>Page:</strong> ${data.page_num}<br>
+                                <strong>Section:</strong> ${data.section_headings ? data.section_headings.join(' > ') : 'N/A'}<br>
+                                <strong>Text:</strong><br>
+                                <div style="margin-top: 10px; padding: 10px; background: #f8f8f8; border-radius: 4px;">
+                                    ${data.text}
+                                </div>
+                            `;
+                        }
+                        citationDiv.style.display = 'block';
+                    })
+                    .catch(error => {
+                        citationText.textContent = 'Error loading chunk details';
+                        citationDiv.style.display = 'block';
+                    });
+            } else {
+                citationText.textContent = 'Highlighted region on page ' + targetPage;
+                citationDiv.style.display = 'block';
+            }
+        }
+        
+        /**
+         * Initialize PDF viewer
+         */
+        function initViewer() {
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            const pdfContainer = document.querySelector('.pdf-container');
+            
+            if (!docId) {
+                loadingDiv.style.display = 'none';
+                errorDiv.textContent = 'No document ID provided';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            // Construct PDF URL
+            const pdfUrl = `/api/document/${docId}/pdf`;
+            
+            // Load PDF
+            pdfjsLib.getDocument(pdfUrl).promise.then(function(pdf) {
+                pdfDoc = pdf;
+                document.getElementById('doc-name').textContent = `Document: ${docId}`;
+                
+                // Initial page render
+                pageNum = targetPage;
+                renderPage(pageNum);
+                
+                // Update button states
+                document.getElementById('prev-page').disabled = pageNum <= 1;
+                document.getElementById('next-page').disabled = pageNum >= pdfDoc.numPages;
+                
+                // Hide loading, show content
+                loadingDiv.style.display = 'none';
+                pdfContainer.style.display = 'block';
+                
+            }).catch(function(error) {
+                console.error('Error loading PDF:', error);
+                loadingDiv.style.display = 'none';
+                errorDiv.textContent = 'Error loading PDF: ' + error.message;
+                errorDiv.style.display = 'block';
+            });
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', initViewer);
+    </script>
+</body>
+</html>

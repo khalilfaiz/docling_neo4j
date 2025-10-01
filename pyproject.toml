@@ -1,0 +1,20 @@
+[project]
+name = "docling-neo4j"
+version = "0.1.0"
+description = "Layout-aware RAG with clickable citations for PDFs using Docling and Neo4j"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "docling>=2.0.0",
+    "neo4j>=5.0.0",
+    "sentence-transformers>=2.2.0",
+    "transformers>=4.30.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "python-dotenv>=1.0.0",
+    "numpy>=1.24.0",
+    "torch>=2.0.0",
+    "python-multipart>=0.0.6",
+    "aiofiles>=23.0.0",
+    "jinja2>=3.1.0",
+]

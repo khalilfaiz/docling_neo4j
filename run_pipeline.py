@@ -33,7 +33,7 @@ def main():
     
     # Step 2: Parse PDFs
     print("\n2. Parsing PDFs...")
-    parser = PDFParser()
+    parser = PDFParser.from_config()
     documents = parser.parse_directory(INPUT_DIR)
     
     if not documents:
@@ -77,6 +77,19 @@ def main():
                 print(f"  📊 Chunks JSON: {metadata['chunks_json_file']}")
             if metadata.get("chunks_md_file"):
                 print(f"  📋 Chunks Markdown: {metadata['chunks_md_file']}")
+            
+            # Show extracted images if available
+            if metadata.get("images"):
+                images = metadata["images"]
+                total_images = sum(len(v) for v in images.values())
+                if total_images > 0:
+                    print(f"  📷 Extracted {total_images} images:")
+                    if images.get("page_images"):
+                        print(f"    - {len(images['page_images'])} page images")
+                    if images.get("table_images"):
+                        print(f"    - {len(images['table_images'])} table images")
+                    if images.get("picture_images"):
+                        print(f"    - {len(images['picture_images'])} picture images")
         
     finally:
         ingestion.close()

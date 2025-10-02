@@ -8,3 +8,11 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Data
+input/
+output/
+input_archive/
+output_archive/
+*.log
+*.pid

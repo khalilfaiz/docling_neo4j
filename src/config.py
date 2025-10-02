@@ -31,6 +31,23 @@ API_PORT = int(os.getenv("API_PORT", "8000"))
 MAX_CHUNK_SIZE = 512  # tokens
 CHUNK_OVERLAP = 50  # tokens
 
+# PDF Parsing Configuration (Docling)
+PDF_IMAGES_SCALE = float(os.getenv("PDF_IMAGES_SCALE", "2.0"))
+PDF_GENERATE_PAGE_IMAGES = os.getenv("PDF_GENERATE_PAGE_IMAGES", "false").lower() == "true"
+PDF_GENERATE_PICTURE_IMAGES = os.getenv("PDF_GENERATE_PICTURE_IMAGES", "false").lower() == "true"
+PDF_DO_OCR = os.getenv("PDF_DO_OCR", "true").lower() == "true"
+PDF_DO_TABLE_STRUCTURE = os.getenv("PDF_DO_TABLE_STRUCTURE", "true").lower() == "true"
+PDF_DO_PICTURE_DESCRIPTION = os.getenv("PDF_DO_PICTURE_DESCRIPTION", "false").lower() == "true"
+
+# VLM (Vision Language Model) Configuration - Built-in GraniteDocling
+PDF_USE_VLM = os.getenv("PDF_USE_VLM", "false").lower() == "true"
+# Default to 'mlx' for Apple Silicon Macs (10x faster than transformers)
+PDF_VLM_MODEL_TYPE = os.getenv("PDF_VLM_MODEL_TYPE", "mlx")  # 'transformers' or 'mlx'
+
+# Accelerator Configuration
+PDF_ACCELERATOR_DEVICE = os.getenv("PDF_ACCELERATOR_DEVICE", "auto")  # 'auto', 'cpu', 'mps', 'cuda'
+PDF_ACCELERATOR_THREADS = int(os.getenv("PDF_ACCELERATOR_THREADS", "8"))
+
 # Vector Index Configuration
 VECTOR_INDEX_NAME = "chunk_embeddings"
 SIMILARITY_THRESHOLD = 0.7

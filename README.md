@@ -4,8 +4,12 @@ A layout-aware Retrieval-Augmented Generation (RAG) system that provides clickab
 
 ## Features
 
-- **Structure-aware PDF parsing** with Docling preserving bounding boxes
-- **Hierarchical chunking** that respects document structure
+- **Advanced PDF parsing** with Docling including OCR, table structure extraction, and optional image extraction
+- **VLM parsing mode** using built-in GraniteDocling model for superior document understanding
+  - **Apple Silicon GPU support** via MLX framework (10x faster than CPU)
+  - **Detailed progress logging** showing model loading, processing stages, and performance metrics
+  - No external server required
+- **Structure-aware chunking** that respects document structure with hierarchical headings
 - **Vector search** with Neo4j's native vector indexes
 - **Clickable evidence pins** that open PDFs with highlighted regions
 - **Context expansion** for better retrieval quality
@@ -14,6 +18,7 @@ A layout-aware Retrieval-Augmented Generation (RAG) system that provides clickab
 - **Query expansion** for improved search recall
 - **PDF upload** through web interface with background processing
 - **Docker support** for easy Neo4j deployment
+- **Configurable pipeline** with environment-based settings for different use cases
 
 ## Architecture
 
@@ -86,6 +91,8 @@ make run-api            # Start the web interface
 make neo4j-setup        # Setup database constraints and indexes
 make neo4j-clear        # Clear all data from database
 make run-pipeline       # Process PDFs (additive - keeps existing data)
+make run-vlm            # Process PDFs with VLM (CPU/Transformers)
+make run-vlm-mlx        # Process PDFs with VLM (Apple Silicon GPU)
 make test-services      # Test all services health
 make clean              # Clean generated files
 
@@ -97,9 +104,26 @@ make help               # Show all available commands
 ### Processing PDFs
 
 1. **Place PDFs** in the `input/` directory
-2. **Choose your approach**:
+2. **Choose your parsing mode**:
+   - **Standard mode** (default): Fast, OCR-based parsing
+   - **VLM mode**: Advanced AI understanding with GraniteDocling
+     - **CPU**: `make run-vlm` (works everywhere)
+     - **GPU**: `make run-vlm-mlx` (10x faster on Apple Silicon M1/M2/M3/M4)
+3. **Choose your approach**:
    - **Fresh start**: `make run-pipeline-reset` (clears existing data)
    - **Add to existing**: `make run-pipeline` (keeps existing data)
+
+**Example with detailed logging:**
+```bash
+# Standard parsing
+make run-pipeline
+
+# VLM with Apple Silicon GPU (recommended for Macs)
+make run-vlm-mlx
+
+# VLM with CPU
+make run-vlm
+```
 
 ### Web Interface Features
 
@@ -116,16 +140,20 @@ Open http://localhost:8000 to access:
 ```
 docling_neo4j/
 ├── input/               # Place PDF files here
-├── output/              # Generated outputs
+├── output/              # Generated outputs (markdown, chunks, images)
+├── docs/                # Documentation
+│   ├── PDF_PARSER_ADVANCED.md  # Advanced parser guide
+│   └── VLM_SETUP_GUIDE.md      # VLM/Granite setup guide
 ├── scripts/             # Utility scripts
-│   ├── clear-neo4j.py   # Database clearing
-│   ├── explore-neo4j.py # Database exploration
-│   └── test-services.sh # Service health checks
+│   ├── clear-neo4j.py          # Database clearing
+│   ├── explore-neo4j.py        # Database exploration
+│   ├── demo_advanced_parser.py # Parser demo script
+│   └── test-services.sh        # Service health checks
 ├── src/
 │   ├── api/            # FastAPI backend
 │   │   └── main.py     # API endpoints and file upload
 │   ├── pipeline/       # Data processing pipeline
-│   │   ├── pdf_parser.py      # Docling PDF parsing
+│   │   ├── pdf_parser.py      # Advanced Docling PDF parsing (enhanced)
 │   │   ├── embeddings.py      # Sentence transformers
 │   │   ├── llm_processor.py   # LLM integration
 │   │   ├── neo4j_setup.py     # Database setup
@@ -135,10 +163,11 @@ docling_neo4j/
 │   │   └── templates/
 │   │       ├── index.html     # Search interface with upload
 │   │       └── viewer.html    # PDF viewer with highlights
-│   └── config.py       # Configuration
+│   └── config.py       # Configuration (with PDF parser settings)
 ├── docker-compose.yml  # Neo4j Docker setup
 ├── run_pipeline.py     # Main pipeline script
 ├── test_components.py  # Component testing
+├── env.example         # Environment variables template
 ├── Makefile           # Project commands
 └── README.md
 ```
@@ -171,6 +200,63 @@ Each Chunk node contains:
 - `GET /api/chunk/{chunk_id}`: Get chunk details
 - `GET /api/document/{doc_id}/pdf`: Serve PDF files
 - `GET /health`: Service health check
+
+## Configuration
+
+### PDF Parser Settings
+
+The parser supports advanced Docling features configurable via `.env`:
+
+```bash
+# OCR and table extraction (recommended defaults)
+PDF_DO_OCR=true                    # Enable OCR for scanned documents
+PDF_DO_TABLE_STRUCTURE=true        # Extract table structure with cell matching
+PDF_IMAGES_SCALE=2.0               # Image resolution scale factor
+
+# Image extraction (optional, increases processing time)
+PDF_GENERATE_PAGE_IMAGES=false     # Extract full page images
+PDF_GENERATE_PICTURE_IMAGES=false  # Extract figure/picture images
+
+# VLM Mode - Built-in GraniteDocling (optional, superior quality, no server needed)
+PDF_USE_VLM=false                  # Enable VLM parsing mode
+PDF_VLM_MODEL_TYPE=transformers    # 'transformers' or 'mlx' (macOS MPS)
+
+# Accelerator Configuration (CPU/GPU acceleration)
+PDF_ACCELERATOR_DEVICE=auto        # 'auto', 'cpu', 'mps' (macOS), 'cuda' (NVIDIA)
+PDF_ACCELERATOR_THREADS=8          # Number of CPU threads
+```
+
+**Parsing Modes:**
+
+1. **Standard Mode (Default)** - Fast, good quality
+   - Uses OCR + layout analysis
+   - Hardware acceleration support (CPU/MPS/CUDA)
+   - Best for: General documents, production RAG
+   
+2. **VLM Mode (GraniteDocling)** - Slower, excellent quality
+   - Uses built-in vision-language model
+   - No external server required (runs locally)
+   - MLX support for macOS MPS acceleration
+   - Best for: Complex layouts, technical documents, tables
+
+**For standard RAG pipelines (recommended):**
+- Keep OCR and table structure enabled
+- Use hardware acceleration (auto-detect)
+- Keep VLM disabled for speed
+
+**For complex documents needing superior quality:**
+- Enable VLM mode: `PDF_USE_VLM=true`
+- Use MLX on macOS: `PDF_VLM_MODEL_TYPE=mlx`
+- No external setup required!
+
+See [docs/PDF_PARSER_ADVANCED.md](docs/PDF_PARSER_ADVANCED.md) for detailed configuration guide.
+
+### Demo Script
+
+Test different parser configurations:
+```bash
+uv run python scripts/demo_advanced_parser.py
+```
 
 ## Advanced Features
 

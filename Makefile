@@ -11,6 +11,8 @@ help:
 	@echo "  make export-only     - Parse PDFs and export markdown/chunks (no Neo4j)"
 	@echo "  make run-pipeline    - Process PDFs and ingest into Neo4j"
 	@echo "  make run-pipeline-reset - Clear database then run pipeline"
+	@echo "  make run-vlm         - Process PDFs with VLM (Vision Language Model)"
+	@echo "  make run-vlm-mlx     - Process PDFs with VLM using Apple Silicon GPU"
 	@echo "  make run-api         - Start the FastAPI server"
 	@echo "  make test-services   - Test all services"
 	@echo "  make clean           - Clean generated files"
@@ -67,3 +69,13 @@ run-pipeline-reset: neo4j-clear neo4j-setup run-pipeline
 # Run component tests
 test:
 	uv run python test_components.py
+
+# Run VLM pipeline with Transformers (CPU)
+run-vlm:
+	@echo "🤖 Running VLM pipeline with Transformers (CPU)..."
+	PDF_USE_VLM=true PDF_VLM_MODEL_TYPE=transformers uv run python run_pipeline.py
+
+# Run VLM pipeline with MLX (Apple Silicon GPU)
+run-vlm-mlx:
+	@echo "🍎 Running VLM pipeline with MLX (Apple Silicon GPU)..."
+	PDF_USE_VLM=true PDF_VLM_MODEL_TYPE=mlx uv run python run_pipeline.py

@@ -5,7 +5,7 @@ description = "Layout-aware RAG with clickable citations for PDFs using Docling 
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "docling>=2.0.0",
+    "docling[vlm]>=2.0.0",  # Include VLM extras for built-in GraniteDocling
     "neo4j>=5.0.0",
     "sentence-transformers>=2.2.0",
     "transformers>=4.30.0",

@@ -16,3 +16,14 @@ input_archive/
 output_archive/
 *.log
 *.pid
+
+# Environment and config
+.env
+.env.backup
+.env.recommended
+
+# Temporary files
+.DS_Store
+*.swp
+*.swo
+*~

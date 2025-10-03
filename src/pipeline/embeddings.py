@@ -53,8 +53,9 @@ class EmbeddingGenerator:
         
         print(f"Generating embeddings for {len(chunks)} chunks...")
         
-        # Extract texts
-        texts = [chunk["text"] for chunk in chunks]
+        # Extract texts for embedding (use text_for_embedding if available, else fallback to text)
+        # text_for_embedding contains contextualized text with hierarchical headings
+        texts = [chunk.get("text_for_embedding", chunk["text"]) for chunk in chunks]
         
         # Generate embeddings in batch
         embeddings = self.generate_embeddings_batch(texts)

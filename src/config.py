@@ -30,6 +30,7 @@ API_PORT = int(os.getenv("API_PORT", "8000"))
 # Chunking Configuration
 MAX_CHUNK_SIZE = 512  # tokens
 CHUNK_OVERLAP = 50  # tokens
+CHUNK_USE_CONTEXTUALIZED = os.getenv("CHUNK_USE_CONTEXTUALIZED", "true").lower() == "true"  # Use hierarchical context for embeddings
 
 # PDF Parsing Configuration (Docling)
 PDF_IMAGES_SCALE = float(os.getenv("PDF_IMAGES_SCALE", "2.0"))

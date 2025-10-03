@@ -52,6 +52,7 @@ class Neo4jIngestion:
                 session.run("""
                     MERGE (c:Chunk {chunkId: $chunk_id})
                     SET c.text = $text,
+                        c.textForEmbedding = $text_for_embedding,
                         c.pageNum = $page_num,
                         c.bbox = $bbox,
                         c.chunkIndex = $chunk_index,
@@ -60,6 +61,7 @@ class Neo4jIngestion:
                 """, {
                     "chunk_id": chunk["chunk_id"],
                     "text": chunk["text"],
+                    "text_for_embedding": chunk.get("text_for_embedding", chunk["text"]),
                     "page_num": chunk["page_num"],
                     "bbox": chunk["bbox"],
                     "chunk_index": chunk["chunk_index"],

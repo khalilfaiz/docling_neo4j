@@ -1,32 +1,61 @@
-# Layout-Aware RAG with Evidence Pins
+# ALouette V3
 
-A layout-aware Retrieval-Augmented Generation (RAG) system that provides clickable citations with exact PDF region highlighting using Docling and Neo4j.
-
-## Features
-
-- **Advanced PDF parsing** with Docling including OCR, table structure extraction, and optional image extraction
-- **VLM parsing mode** using built-in GraniteDocling model for superior document understanding
-  - **Apple Silicon GPU support** via MLX framework (10x faster than CPU)
-  - **Detailed progress logging** showing model loading, processing stages, and performance metrics
-  - No external server required
-- **Structure-aware chunking** that respects document structure with hierarchical headings
-- **Vector search** with Neo4j's native vector indexes
-- **Clickable evidence pins** that open PDFs with highlighted regions
-- **Context expansion** for better retrieval quality
-- **Web interface** for search and PDF viewing
-- **LLM integration** for generating natural language answers with citations
-- **Query expansion** for improved search recall
-- **PDF upload** through web interface with background processing
-- **Docker support** for easy Neo4j deployment
-- **Configurable pipeline** with environment-based settings for different use cases
+A layout-aware Retrieval-Augmented Generation (RAG) system that processes PDFs into a searchable knowledge graph with semantic vector search using Docling and Neo4j.
 
 ## Architecture
 
+### High-Level Flow
 ```
 PDF Files → Docling Parser → Chunks with BBoxes → Embeddings → Neo4j Graph
                                                                     ↓
 User Query → Embedding → Vector Search → Context Expansion → Results with Citations
 ```
+
+### System Components
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        INGESTION PIPELINE                        │
+├─────────────────────────────────────────────────────────────────┤
+│  PDF Files (input/)                                             │
+│       ↓                                                          │
+│  [PDFParser] - Docling-based parsing with OCR/VLM              │
+│       ↓                                                          │
+│  [HybridChunker] - Structure-aware chunking                     │
+│       ↓                                                          │
+│  [EmbeddingGenerator] - Sentence transformers                   │
+│       ↓                                                          │
+│  [Neo4jIngestion] - Graph database storage                      │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                         QUERY PIPELINE                           │
+├─────────────────────────────────────────────────────────────────┤
+│  User Query (API/Script)                                        │
+│       ↓                                                          │
+│  [Retriever] - Vector similarity search                         │
+│       ↓                                                          │
+│  [Context Expansion] - Fetch neighboring chunks                 │
+│       ↓                                                          │
+│  [LLMProcessor] - Generate natural language answer (optional)   │
+│       ↓                                                          │
+│  Results with metadata and citations                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Features
+
+- **PDF parsing** with Docling including OCR, table structure extraction, and optional image extraction
+- **VLM parsing mode** using built-in VLMs models for superior document understanding
+  - **Apple Silicon GPU support** via MLX framework (10x faster than CPU)
+  - **Detailed progress logging** showing model loading, processing stages, and performance metrics
+- **Structure-aware chunking** with optional contextualization that adds hierarchical headings to improve RAG retrieval
+- **Vector search** with Neo4j's native vector indexes
+- **Context expansion** for better retrieval quality
+- **LLM integration** for generating natural language answers with citations
+- **Query expansion** for improved search recall
+- **Docker support** for easy Neo4j deployment
+- **Configurable pipeline** with environment-based settings for different use cases
 
 ## Prerequisites
 
@@ -47,13 +76,12 @@ make install
 make docker-up
 ```
 
-3. **Process PDFs and start the system**:
+3. **Process PDFs**:
 ```bash
-make run-pipeline-reset  # Fresh start
-make run-api            # Start web interface
+make run-pipeline-reset  # Fresh start with clean database
 ```
 
-4. **Open http://localhost:8000** in your browser
+4. **Query your documents** using the Retriever API (see usage examples below)
 
 ## Manual Installation
 
@@ -85,7 +113,6 @@ cp env.example .env
 # Quick start commands
 make docker-up           # Start Neo4j in Docker
 make run-pipeline-reset  # Clear database and process all PDFs
-make run-api            # Start the web interface
 
 # Individual operations
 make neo4j-setup        # Setup database constraints and indexes
@@ -93,6 +120,7 @@ make neo4j-clear        # Clear all data from database
 make run-pipeline       # Process PDFs (additive - keeps existing data)
 make run-vlm            # Process PDFs with VLM (CPU/Transformers)
 make run-vlm-mlx        # Process PDFs with VLM (Apple Silicon GPU)
+make export-only        # Export PDFs to markdown without Neo4j ingestion
 make test-services      # Test all services health
 make clean              # Clean generated files
 
@@ -125,51 +153,163 @@ make run-vlm-mlx
 make run-vlm
 ```
 
-### Web Interface Features
-
-Open http://localhost:8000 to access:
-
-- **Search Interface**: Ask questions about your documents
-- **Evidence Pins**: Click citations to see exact PDF regions highlighted
-- **PDF Upload**: Upload new PDFs directly through the web interface
-- **LLM Integration**: Enable AI-powered answers with citations
-- **Query Expansion**: Improve search results with query variations
-
 ## Project Structure
 
 ```
 docling_neo4j/
-├── input/               # Place PDF files here
-├── output/              # Generated outputs (markdown, chunks, images)
-├── docs/                # Documentation
-│   ├── PDF_PARSER_ADVANCED.md  # Advanced parser guide
-│   └── VLM_SETUP_GUIDE.md      # VLM/Granite setup guide
-├── scripts/             # Utility scripts
-│   ├── clear-neo4j.py          # Database clearing
-│   ├── explore-neo4j.py        # Database exploration
-│   ├── demo_advanced_parser.py # Parser demo script
-│   └── test-services.sh        # Service health checks
-├── src/
-│   ├── api/            # FastAPI backend
-│   │   └── main.py     # API endpoints and file upload
-│   ├── pipeline/       # Data processing pipeline
-│   │   ├── pdf_parser.py      # Advanced Docling PDF parsing (enhanced)
-│   │   ├── embeddings.py      # Sentence transformers
-│   │   ├── llm_processor.py   # LLM integration
-│   │   ├── neo4j_setup.py     # Database setup
-│   │   ├── neo4j_ingestion.py # Data ingestion
-│   │   └── retrieval.py       # Vector search & context expansion
-│   ├── web/            # Web interface
-│   │   └── templates/
-│   │       ├── index.html     # Search interface with upload
-│   │       └── viewer.html    # PDF viewer with highlights
-│   └── config.py       # Configuration (with PDF parser settings)
-├── docker-compose.yml  # Neo4j Docker setup
-├── run_pipeline.py     # Main pipeline script
-├── test_components.py  # Component testing
-├── env.example         # Environment variables template
-├── Makefile           # Project commands
-└── README.md
+├── input/                      # 📁 Input directory for PDF files
+├── output/                     # 📁 Generated outputs (markdown, chunks, images)
+├── output_archive/             # 📁 Archived outputs from previous runs
+├── input_archive/              # 📁 Archived source PDFs
+│
+├── docs/                       # 📚 Documentation
+│   └── PDF_PARSER_ADVANCED.md  #    Advanced PDF parser configuration guide
+│
+├── scripts/                    # 🛠️  Utility scripts
+│   ├── clear-neo4j.py          #    Clear all data from Neo4j database
+│   ├── explore-neo4j.py        #    Explore database contents and statistics
+│   ├── export-only.py          #    Export PDFs to markdown without Neo4j ingestion
+│   ├── setup-neo4j-auth.sh     #    Setup Neo4j authentication
+│   └── test-services.sh        #    Health check for all services
+│
+├── src/                        # 💻 Source code
+│   ├── config.py               #    Central configuration from environment variables
+│   │
+│   ├── pipeline/               # 🔄 Data processing pipeline
+│   │   ├── pdf_parser.py       #    PDF parsing with Docling (OCR, VLM, tables)
+│   │   ├── embeddings.py       #    Generate vector embeddings (Sentence Transformers)
+│   │   ├── neo4j_setup.py      #    Setup database constraints and vector indexes
+│   │   ├── neo4j_ingestion.py  #    Ingest documents/chunks into Neo4j graph
+│   │   ├── retrieval.py        #    Vector search and context expansion
+│   │   └── llm_processor.py    #    LLM integration for answer generation
+│   │
+│   ├── api/                    # 🌐 REST API (see front.md)
+│   └── web/                    # 🎨 Web UI (see front.md)
+│
+├── run_pipeline.py             # 🚀 Main entry point - full ingestion pipeline
+├── test_components.py          # ✅ Component tests for pipeline modules
+├── test_vlm_mlx.py             # ✅ VLM with MLX (Apple Silicon GPU) testing
+├── main.py                     # 📝 Simple entry point stub
+│
+├── docker-compose.yml          # 🐳 Neo4j Docker configuration
+├── Makefile                    # ⚙️  Project commands and automation
+├── pyproject.toml              # 📦 Python dependencies (uv/pip)
+├── uv.lock                     # 🔒 Locked dependency versions
+├── env.example                 # 📄 Environment variables template
+└── README.md                   # 📖 This file
+```
+
+### Core Components Explained
+
+#### 1. **PDFParser** (`src/pipeline/pdf_parser.py`)
+- Uses Docling for advanced PDF parsing
+- Supports OCR for scanned documents
+- Extracts tables with structure preservation
+- Optional VLM mode for complex layouts
+- Hardware acceleration (CPU/MPS/CUDA)
+- Outputs: structured chunks with bounding boxes
+
+#### 2. **EmbeddingGenerator** (`src/pipeline/embeddings.py`)
+- Generates vector embeddings using Sentence Transformers
+- Supports batch processing for efficiency
+- Default model: all-MiniLM-L6-v2 (384 dimensions)
+- Embeds contextualized text (with document structure)
+
+#### 3. **Neo4jSetup** (`src/pipeline/neo4j_setup.py`)
+- Creates database constraints (unique IDs)
+- Creates vector indexes for similarity search
+- Verifies Neo4j connection and setup
+
+#### 4. **Neo4jIngestion** (`src/pipeline/neo4j_ingestion.py`)
+- Ingests documents into Neo4j graph
+- Creates relationships: CONTAINS, HAS_SECTION, INCLUDES, NEXT
+- Stores chunks with embeddings and bounding boxes
+- Provides statistics and health checks
+
+#### 5. **Retriever** (`src/pipeline/retrieval.py`)
+- Performs vector similarity search
+- Context expansion (fetches neighboring chunks)
+- Supports layout-aware filtering
+- Returns results with metadata and bounding boxes
+
+#### 6. **LLMProcessor** (`src/pipeline/llm_processor.py`)
+- Generates natural language answers
+- Supports OpenAI and Ollama providers
+- Maintains proper citations with chunk references
+- Fallback to keyword-based answers
+
+## Pipeline Flow
+
+### Ingestion Pipeline (`run_pipeline.py`)
+
+```
+1. Neo4jSetup
+   ├─ Create constraints (unique IDs)
+   ├─ Create vector indexes
+   └─ Verify connection
+          ↓
+2. PDFParser
+   ├─ Parse PDF with Docling
+   ├─ Extract text, tables, images
+   ├─ Generate document structure
+   └─ Create chunks with bounding boxes
+          ↓
+3. EmbeddingGenerator
+   ├─ Load Sentence Transformer model
+   ├─ Generate embeddings for each chunk
+   └─ Add embeddings to chunk data
+          ↓
+4. Neo4jIngestion
+   ├─ Create Document nodes
+   ├─ Create Chunk nodes (with embeddings)
+   ├─ Create Section nodes
+   ├─ Create relationships (CONTAINS, HAS_SECTION, INCLUDES, NEXT)
+   └─ Export statistics
+```
+
+### Query Pipeline (Programmatic Usage)
+
+```
+1. User query (Python script or API call)
+          ↓
+2. EmbeddingGenerator
+   └─ Generate embedding for query text
+          ↓
+3. Retriever
+   ├─ Vector similarity search in Neo4j
+   ├─ Context expansion (fetch neighboring chunks)
+   └─ Return ranked results with metadata
+          ↓
+4. LLMProcessor (optional)
+   ├─ Generate natural language answer
+   ├─ Include chunk citations
+   └─ Format response
+          ↓
+5. Return results
+   └─ JSON/dict with chunks, scores, metadata
+```
+
+### Example Usage
+
+```python
+from src.pipeline.retrieval import Retriever
+from src.pipeline.llm_processor import LLMProcessor
+
+# Initialize retriever
+retriever = Retriever()
+
+# Search documents
+results = retriever.vector_search("What are the accessibility requirements?", top_k=5)
+
+# Optional: Generate LLM answer
+llm = LLMProcessor(llm_provider="ollama")
+answer = llm.generate_answer_with_citations("What are the accessibility requirements?", results)
+
+# Results contain chunk text, bounding boxes, page numbers, etc.
+for result in results:
+    print(f"Page {result['page_num']}: {result['text'][:100]}...")
+    print(f"BBox: {result['bbox']}")
+    print(f"Score: {result['score']}")
 ```
 
 ## Data Model
@@ -182,26 +322,59 @@ The system uses the following Neo4j graph structure:
 (Chunk)-[:NEXT]->(Chunk)
 ```
 
-Each Chunk node contains:
+### Node Properties
+
+**Document Node:**
+- `docId`: Unique document identifier
+- `filename`: Original PDF filename
+- `pageCount`: Number of pages
+- `filepath`: Path to PDF file
+
+**Chunk Node:**
 - `chunkId`: Unique identifier
-- `text`: The chunk text
+- `text`: Raw chunk text (for display)
+- `textForEmbedding`: Contextualized text (used for vector embedding)
+- `embedding`: Vector embedding (384 dimensions)
 - `pageNum`: Page number
-- `bbox`: Bounding box [x0, y0, x1, y1]
-- `embedding`: Vector embedding
+- `bbox`: Bounding box [x0, y0, x1, y1] for evidence highlighting
 - `chunkIndex`: Position in document
+- `documentTitle`: Document name for context
 
-## API Endpoints
+**Section Node:**
+- `sectionId`: Unique identifier
+- `heading`: Section heading text
+- `level`: Heading level (1-6)
 
-- `GET /`: Main search interface with upload capability
-- `GET /viewer`: PDF viewer with evidence highlighting
-- `POST /api/search`: Vector search with LLM integration
-- `POST /api/upload`: Upload and process PDF files
-- `GET /api/status/{file_id}`: Check upload processing status
-- `GET /api/chunk/{chunk_id}`: Get chunk details
-- `GET /api/document/{doc_id}/pdf`: Serve PDF files
-- `GET /health`: Service health check
+### Relationships
+
+- `CONTAINS`: Document → Chunk (contains chunks)
+- `HAS_SECTION`: Document → Section (document structure)
+- `INCLUDES`: Section → Chunk (section membership)
+- `NEXT`: Chunk → Chunk (sequential ordering for context expansion)
 
 ## Configuration
+
+### Chunking Settings
+
+Configure how text chunks are created and embedded:
+
+```bash
+# Use contextualized text (with hierarchical headings) for embeddings
+# Recommended: true for better RAG retrieval quality
+CHUNK_USE_CONTEXTUALIZED=true
+```
+
+**Contextualized Chunking** (Recommended):
+- Adds document title and section headings to each chunk before embedding
+- Improves semantic search by providing hierarchical context
+- Based on Docling's hybrid chunking best practices
+- Example: `"IBM\n1960s-1980s\nIn 1961, IBM developed..."`
+- Minimal performance impact with significant quality improvement
+
+**Raw Chunking** (`CHUNK_USE_CONTEXTUALIZED=false`):
+- Embeds only the raw chunk text without additional context
+- Faster but may miss document structure relationships
+- Use for simple documents or when structure is not important
 
 ### PDF Parser Settings
 
@@ -251,13 +424,6 @@ PDF_ACCELERATOR_THREADS=8          # Number of CPU threads
 
 See [docs/PDF_PARSER_ADVANCED.md](docs/PDF_PARSER_ADVANCED.md) for detailed configuration guide.
 
-### Demo Script
-
-Test different parser configurations:
-```bash
-uv run python scripts/demo_advanced_parser.py
-```
-
 ## Advanced Features
 
 ### LLM Integration
@@ -274,21 +440,38 @@ ollama pull llama2
 export OPENAI_API_KEY="your-api-key"
 ```
 
-Then check "Use LLM for answers" in the web interface.
+Then use the LLMProcessor in your Python code:
+
+```python
+from src.pipeline.llm_processor import LLMProcessor
+
+llm = LLMProcessor(llm_provider="ollama")  # or "openai"
+answer = llm.generate_answer_with_citations(query, search_results)
+```
 
 ### Query Expansion
 
-Improve search results by checking "Query expansion" which:
+The Retriever supports query expansion for improved recall:
+
+```python
+results = retriever.vector_search(
+    query="accessibility requirements",
+    top_k=5,
+    expand_query=True  # Generates variations
+)
+```
+
+How it works:
 - Generates multiple query variations
 - Searches with different phrasings
-- Combines results for better recall
+- Combines and ranks results for better recall
 
 ### Multi-Document Search
 
 The system supports multiple documents:
-- Add new PDFs: `make run-pipeline` (keeps existing)
-- Fresh start: `make run-pipeline-reset` (clears all)
-- Upload via web: Click "Upload PDF" button
+- **Add new PDFs:** Place in `input/` and run `make run-pipeline` (keeps existing)
+- **Fresh start:** `make run-pipeline-reset` (clears all data)
+- **Search across all:** Retriever automatically searches entire corpus
 
 ## Example Queries
 
@@ -339,46 +522,45 @@ uv run python scripts/explore-neo4j.py
 # Comprehensive service check
 make test-services
 
-# Individual health checks
-curl http://localhost:8000/health
+# Check Neo4j
 curl http://localhost:7474
 ```
 
-## Recent Improvements
+## Key Features
 
-This implementation includes several enhancements over the original concept:
+This implementation includes several enhancements:
 
 ### 🤖 **LLM Integration**
 - Natural language answer generation with inline citations
 - Support for OpenAI and Ollama providers
 - Fallback to keyword-based answers when LLM unavailable
-
-### 📤 **File Upload System**
-- Upload PDFs directly through web interface
-- Background processing with status tracking
-- No need to manually place files in directories
+- Programmatic API for custom integrations
 
 ### 🐳 **Docker Support**
 - One-command Neo4j setup with `make docker-up`
 - Persistent data storage with Docker volumes
 - Automated health checks and service management
 
-### 🔍 **Enhanced Search**
+### 🔍 **Advanced Search Capabilities**
+- Vector similarity search with embeddings
 - Query expansion for better retrieval recall
 - Context window expansion for richer results
 - Multi-document search across entire corpus
+- Layout-aware chunk positioning
 
 ### 🛠️ **Developer Experience**
 - Comprehensive Makefile with all operations
 - Component testing and service health checks
 - Database exploration and management tools
 - Clear separation of concerns in codebase
+- Well-documented Python APIs
 
-### 🎨 **Improved Web Interface**
-- Modern, responsive design
-- Real-time upload progress and status
-- Toggle switches for LLM and query expansion features
-- Better error handling and user feedback
+### 📄 **PDF Processing**
+- VLM mode with GraniteDocling for complex documents
+- Apple Silicon GPU acceleration (MLX)
+- OCR and table structure extraction
+- Bounding box preservation for citations
+- Contextualized chunking for better retrieval
 
 ## License
 

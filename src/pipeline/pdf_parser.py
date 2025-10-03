@@ -16,7 +16,7 @@ from transformers import AutoTokenizer
 import sys
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
-from src.config import EMBEDDING_MODEL, MAX_CHUNK_SIZE, CHUNK_OVERLAP, OUTPUT_DIR
+from src.config import EMBEDDING_MODEL, MAX_CHUNK_SIZE, CHUNK_OVERLAP, CHUNK_USE_CONTEXTUALIZED, OUTPUT_DIR
 
 
 class PDFParser:
@@ -355,6 +355,11 @@ class PDFParser:
                     f.write(f"- **Section**: {' > '.join(chunk['headings'])}\n")
                 
                 f.write(f"\n**Content:**\n```\n{chunk['text']}\n```\n\n")
+                
+                # Show contextualized text if different from raw text
+                if chunk.get('text_for_embedding') and chunk['text_for_embedding'] != chunk['text']:
+                    f.write(f"**Contextualized Text (for embedding):**\n```\n{chunk['text_for_embedding']}\n```\n\n")
+                
                 f.write("---\n\n")
         
         print(f"✓ Exported chunks: {json_file}")
@@ -549,6 +554,12 @@ class PDFParser:
         
         # Process chunks
         print(f"\n✂️  Processing document into chunks...")
+        use_contextualized = CHUNK_USE_CONTEXTUALIZED
+        if use_contextualized:
+            print(f"  ✓ Using contextualized text (hierarchical headings) for embeddings")
+        else:
+            print(f"  ✓ Using raw text for embeddings")
+        
         chunks = []
         chunk_start_time = time.time()
         
@@ -556,6 +567,13 @@ class PDFParser:
             chunk_text = chunk.text.strip()
             if not chunk_text:
                 continue
+            
+            # Generate contextualized text if enabled (adds hierarchical context)
+            # Per Docling docs: "text you would typically want to embed is the context-enriched one"
+            if use_contextualized:
+                text_for_embedding = self.chunker.contextualize(chunk).strip()
+            else:
+                text_for_embedding = chunk_text
             
             # Extract bounding box and page number
             bbox = [0, 0, 0, 0]
@@ -571,13 +589,14 @@ class PDFParser:
             chunk_data = {
                 "chunk_id": self.make_chunk_id(chunk_text, page_num),
                 "doc_id": doc_id,
-                "text": chunk_text,
+                "text": chunk_text,  # Raw text for display
+                "text_for_embedding": text_for_embedding,  # Contextualized or raw for embedding
                 "page_num": page_num,
                 "bbox": bbox,
                 "headings": headings,
                 "section": " > ".join(headings) if headings else "",
                 "chunk_index": idx,
-                "token_count": len(self.base_tokenizer.tokenize(chunk_text))
+                "token_count": len(self.base_tokenizer.tokenize(text_for_embedding))
             }
             
             chunks.append(chunk_data)
